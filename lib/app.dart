@@ -1,13 +1,20 @@
+import 'package:cuoi_ky/core/network/network_info.dart';
+import 'package:cuoi_ky/core/utils/app_theme_mode.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 
 import 'core/network/api_client.dart';
-import 'core/network/network_info.dart';
 import 'data/remote/services/transaction_api.dart';
 import 'data/repositories/category_repository.dart';
 import 'data/repositories/settings_repository.dart';
 import 'data/repositories/sync_repository.dart';
 import 'data/repositories/transaction_repository.dart';
+
+// ===== Auth imports =====
+import 'data/remote/services/auth_api.dart';
+import 'data/repositories/auth_repository.dart';
+import 'features/auth/presentation/login_page.dart';
+import 'features/auth/state/auth_vm.dart';
 
 import 'features/settings/presentation/pages/settings_page.dart';
 import 'features/settings/state/categories_vm.dart';
@@ -16,6 +23,7 @@ import 'features/stats/presentation/pages/monthly_stats_page.dart';
 import 'features/stats/state/stats_vm.dart';
 import 'features/transactions/presentation/pages/transactions_home_page.dart';
 import 'features/transactions/state/transactions_vm.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class MoneyTrackApp extends StatelessWidget {
   const MoneyTrackApp({super.key});
@@ -29,10 +37,18 @@ class MoneyTrackApp extends StatelessWidget {
         Provider(create: (_) => CategoryRepository()),
         Provider(create: (_) => SettingsRepository()),
 
-        // ===== Network + Sync (MUST be before VMs that read them) =====
+        // ===== Auth local (Hive session) =====
+        Provider(create: (_) => AuthRepository()),
+
+        // ===== Network =====
         Provider(create: (_) => ApiClient(baseUrl: 'http://localhost:3000')),
-        Provider(create: (_) => NetworkInfo()),
+        Provider(create: (_) => NetworkInfo(Connectivity())),
+
+        // ===== Remote services =====
+        Provider(create: (ctx) => AuthApi()),
         Provider(create: (ctx) => TransactionApi(ctx.read<ApiClient>())),
+
+        // ===== Sync =====
         Provider(
           create: (ctx) => SyncRepository(
             networkInfo: ctx.read<NetworkInfo>(),
@@ -42,6 +58,12 @@ class MoneyTrackApp extends StatelessWidget {
         ),
 
         // ===== ViewModels =====
+        ChangeNotifierProvider(
+          create: (ctx) => AuthVm(
+            authRepo: ctx.read<AuthRepository>(),
+            authApi: ctx.read<AuthApi>(),
+          )..init(),
+        ),
         ChangeNotifierProvider(
           create: (ctx) => TransactionsVm(
             ctx.read<TransactionRepository>(),
@@ -61,12 +83,46 @@ class MoneyTrackApp extends StatelessWidget {
           ),
         ),
       ],
-      child: const CupertinoApp(
-        debugShowCheckedModeBanner: false,
-        title: 'MoneyTrack',
-        home: _RootTabs(),
-      ),
+      child: Consumer<SettingsVm>(
+      builder: (context, settingsVm, _) {
+        final brightness = settingsVm.themeMode.toBrightness(); // null => system
+
+        return CupertinoApp(
+          debugShowCheckedModeBanner: false,
+          title: 'MoneyTrack',
+          theme: CupertinoThemeData(
+            brightness: brightness,
+          ),
+      home: const _AuthGate(),
     );
+  },
+),
+
+    );
+  }
+}
+
+/// Nếu đã login -> vào tabs
+/// Chưa login -> LoginPage
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    final authVm = context.watch<AuthVm>();
+
+    if (authVm.status == AuthStatus.loading ||
+        authVm.status == AuthStatus.unknown) {
+      return const CupertinoPageScaffold(
+        child: Center(child: CupertinoActivityIndicator()),
+      );
+    }
+
+    if (authVm.status == AuthStatus.authenticated) {
+      return const _RootTabs();
+    }
+
+    return const LoginPage();
   }
 }
 

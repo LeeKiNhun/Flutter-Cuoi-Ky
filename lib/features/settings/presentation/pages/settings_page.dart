@@ -1,7 +1,9 @@
+import 'package:cuoi_ky/core/utils/app_theme_mode.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../data/hive/default_categories.dart';
+import '../../../auth/state/auth_vm.dart';
 import '../../../stats/state/stats_vm.dart';
 import '../../../transactions/state/transactions_vm.dart';
 import '../../state/settings_vm.dart';
@@ -12,9 +14,13 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.watch<SettingsVm>();
+    final settingsVm = context.watch<SettingsVm>();
+    final authVm = context.watch<AuthVm>();
+
     final txVm = context.read<TransactionsVm>();
     final statsVm = context.read<StatsVm>();
+
+    final userEmail = authVm.session?.user.email;
 
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(
@@ -24,17 +30,74 @@ class SettingsPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
+            // ======================
+            // ACCOUNT
+            // ======================
+            CupertinoListSection.insetGrouped(
+              header: const Text('Tài khoản'),
+              children: [
+                CupertinoListTile(
+                  title: const Text('Trạng thái'),
+                  subtitle: Text(
+                    userEmail != null
+                        ? 'Đã đăng nhập: $userEmail'
+                        : 'Chưa đăng nhập',
+                  ),
+                ),
+                CupertinoListTile(
+                  title: const Text(
+                    'Đăng xuất',
+                    style: TextStyle(color: CupertinoColors.systemRed),
+                  ),
+                  onTap: () async {
+                    final ok = await showCupertinoDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => CupertinoAlertDialog(
+                        title: const Text('Đăng xuất?'),
+                        content: const Text(
+                          'Bạn sẽ quay về màn hình đăng nhập.',
+                        ),
+                        actions: [
+                          CupertinoDialogAction(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(false),
+                            child: const Text('Hủy'),
+                          ),
+                          CupertinoDialogAction(
+                            isDestructiveAction: true,
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(true),
+                            child: const Text('Đăng xuất'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (ok == true) {
+                      await authVm.logout();
+                      // ❗ Không cần Navigator.pop
+                      // _AuthGate sẽ tự chuyển về LoginPage
+                    }
+                  },
+                ),
+              ],
+            ),
+
+            // ======================
+            // DATA
+            // ======================
             CupertinoListSection.insetGrouped(
               header: const Text('Data'),
               children: [
-                // ✅ Seed demo
+                // Seed demo
                 CupertinoListTile(
                   title: const Text('Seed demo data (>= 20)'),
-                  trailing: vm.busy ? const CupertinoActivityIndicator() : null,
-                  onTap: vm.busy
+                  trailing:
+                      settingsVm.busy ? const CupertinoActivityIndicator() : null,
+                  onTap: settingsVm.busy
                       ? null
                       : () async {
-                          await vm.seedDemo(
+                          await settingsVm.seedDemo(
                             month: DateTime.now(),
                             txVm: txVm,
                             statsVm: statsVm,
@@ -43,11 +106,12 @@ class SettingsPage extends StatelessWidget {
                         },
                 ),
 
-                // ✅ Reset
+                // Reset
                 CupertinoListTile(
                   title: const Text('Reset data'),
-                  trailing: vm.busy ? const CupertinoActivityIndicator() : null,
-                  onTap: vm.busy
+                  trailing:
+                      settingsVm.busy ? const CupertinoActivityIndicator() : null,
+                  onTap: settingsVm.busy
                       ? null
                       : () async {
                           final ok = await showCupertinoDialog<bool>(
@@ -74,16 +138,20 @@ class SettingsPage extends StatelessWidget {
                           );
 
                           if (ok == true) {
-                            await vm.reset(
+                            await settingsVm.reset(
                               txVm: txVm,
                               statsVm: statsVm,
-                              defaults: defaultCategories, // ✅ defaults chuẩn
+                              defaults: defaultCategories,
                             );
                           }
                         },
                 ),
               ],
             ),
+
+            // ======================
+            // CATEGORIES
+            // ======================
             CupertinoListSection.insetGrouped(
               header: const Text('Danh mục'),
               children: [
@@ -92,18 +160,44 @@ class SettingsPage extends StatelessWidget {
                   trailing: const Icon(CupertinoIcons.chevron_forward),
                   onTap: () {
                     Navigator.of(context).push(
-                      CupertinoPageRoute(builder: (_) => const CategoriesPage()),
+                      CupertinoPageRoute(
+                        builder: (_) => const CategoriesPage(),
+                      ),
                     );
                   },
                 ),
               ],
             ),
             CupertinoListSection.insetGrouped(
+            header: const Text('Giao diện'),
+            children: [
+              CupertinoListTile(
+                title: const Text('Theme'),
+                subtitle: Text(settingsVm.themeMode.label),
+                trailing: CupertinoSlidingSegmentedControl<AppThemeMode>(
+                  groupValue: settingsVm.themeMode,
+                  children: const {
+                    AppThemeMode.system: Text('System'),
+                    AppThemeMode.light: Text('Light'),
+                    AppThemeMode.dark: Text('Dark'),
+                  },
+                  onValueChanged: (v) {
+                    if (v != null) settingsVm.setThemeMode(v);
+                  },
+                ),
+              ),
+            ],
+          ),
+
+            // ======================
+            // ABOUT
+            // ======================
+            CupertinoListSection.insetGrouped(
               header: const Text('About'),
               children: const [
                 CupertinoListTile(
                   title: Text('MoneyTrack MVP'),
-                  subtitle: Text('Offline • Hive • Cupertino'),
+                  subtitle: Text('Offline • Hive • Cupertino • ReqRes Auth'),
                 ),
               ],
             ),

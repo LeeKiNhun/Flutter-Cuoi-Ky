@@ -1,3 +1,4 @@
+import 'package:cuoi_ky/core/utils/app_theme_mode.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../data/models/category_entity.dart';
@@ -7,17 +8,34 @@ import '../../stats/state/stats_vm.dart';
 import '../../transactions/state/transactions_vm.dart';
 
 class SettingsVm extends ChangeNotifier {
-  SettingsVm(this._settingsRepo, this._catRepo);
+  SettingsVm(this._settingsRepo, this._catRepo) {
+    _loadTheme();
+  }
 
   final SettingsRepository _settingsRepo;
   final CategoryRepository _catRepo;
 
+  // ===== Theme =====
+  AppThemeMode _themeMode = AppThemeMode.system;
+  AppThemeMode get themeMode => _themeMode;
+
+  Future<void> _loadTheme() async {
+    final v = await _settingsRepo.getThemeMode();
+    _themeMode = AppThemeModeX.fromString(v);
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(AppThemeMode mode) async {
+    _themeMode = mode;
+    notifyListeners();
+    await _settingsRepo.setThemeMode(mode.toValue());
+  }
+
+  // ===== Busy =====
   bool _busy = false;
   bool get busy => _busy;
 
-  // Dùng lại defaults giống HiveInit (bạn có thể refactor chung sau)
-  List<CategoryEntity> get defaultCategories => _catRepo.getAll(); 
-  // NOTE: nếu bạn muốn “defaults cứng”, mình sẽ đưa hẳn list giống HiveInit.
+  List<CategoryEntity> get defaultCategories => _catRepo.getAll();
 
   Future<void> seedDemo({
     required DateTime month,

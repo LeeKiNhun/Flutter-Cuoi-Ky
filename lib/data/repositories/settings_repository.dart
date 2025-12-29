@@ -5,7 +5,22 @@ import '../hive/boxes.dart';
 import '../models/category_entity.dart';
 import '../models/transaction_entity.dart';
 
+
 class SettingsRepository {
+  static const _boxName = 'settings';
+  static const _kThemeMode = 'themeMode';
+
+  Future<Box> _box() => Hive.openBox(_boxName);
+
+  Future<String?> getThemeMode() async {
+    final box = await _box();
+    return box.get(_kThemeMode) as String?;
+  }
+
+  Future<void> setThemeMode(String value) async {
+    final box = await _box();
+    await box.put(_kThemeMode, value);
+  }
   Box<CategoryEntity> get _catBox => Hive.box<CategoryEntity>(HiveBoxes.categories);
   Box<TransactionEntity> get _txBox => Hive.box<TransactionEntity>(HiveBoxes.transactions);
 
