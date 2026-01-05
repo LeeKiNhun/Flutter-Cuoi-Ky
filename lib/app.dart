@@ -1,35 +1,52 @@
-import 'package:cuoi_ky/core/network/network_info.dart';
-import 'package:cuoi_ky/core/utils/app_theme_mode.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'core/network/api_client.dart';
-import 'data/remote/services/transaction_api.dart';
+import 'core/network/network_info.dart';
+import 'core/utils/app_theme_mode.dart';
+
+import 'data/repositories/transaction_repository.dart';
 import 'data/repositories/category_repository.dart';
 import 'data/repositories/settings_repository.dart';
 import 'data/repositories/sync_repository.dart';
-import 'data/repositories/transaction_repository.dart';
 
-// ===== Auth imports =====
+import 'data/remote/services/transaction_api.dart';
+
+// ===== AI =====
+import 'data/remote/services/ai_api.dart';
+import 'data/repositories/ai_repository.dart';
+import 'features/ai/ai_vm.dart';
+
+// ===== Auth =====
 import 'data/remote/services/auth_api.dart';
 import 'data/repositories/auth_repository.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/auth/state/auth_vm.dart';
 
+// ===== Features =====
+import 'features/transactions/presentation/pages/transactions_home_page.dart';
+import 'features/transactions/state/transactions_vm.dart';
+
+import 'features/stats/presentation/pages/monthly_stats_page.dart';
+import 'features/stats/state/stats_vm.dart';
+
 import 'features/settings/presentation/pages/settings_page.dart';
 import 'features/settings/state/categories_vm.dart';
 import 'features/settings/state/settings_vm.dart';
-import 'features/stats/presentation/pages/monthly_stats_page.dart';
-import 'features/stats/state/stats_vm.dart';
-import 'features/transactions/presentation/pages/transactions_home_page.dart';
-import 'features/transactions/state/transactions_vm.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 
 class MoneyTrackApp extends StatelessWidget {
   const MoneyTrackApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // ✅ baseUrl chạy được cả Web + Android emulator
+    // - Web: localhost
+    // - Android emulator: 10.0.2.2
+    // - iOS simulator: localhost (OK)
+    final baseUrl = kIsWeb ? 'http://localhost:3000' : 'http://10.0.2.2:3000';
+
     return MultiProvider(
       providers: [
         // ===== Local repositories (Hive) =====
@@ -41,12 +58,13 @@ class MoneyTrackApp extends StatelessWidget {
         Provider(create: (_) => AuthRepository()),
 
         // ===== Network =====
-        Provider(create: (_) => ApiClient(baseUrl: 'http://localhost:3000')),
+        Provider(create: (_) => ApiClient(baseUrl: baseUrl)),
         Provider(create: (_) => NetworkInfo(Connectivity())),
 
         // ===== Remote services =====
-        Provider(create: (ctx) => AuthApi()),
+        Provider(create: (_) => AuthApi()),
         Provider(create: (ctx) => TransactionApi(ctx.read<ApiClient>())),
+        Provider(create: (ctx) => AiApi(ctx.read<ApiClient>())),
 
         // ===== Sync =====
         Provider(
@@ -56,6 +74,10 @@ class MoneyTrackApp extends StatelessWidget {
             localRepo: ctx.read<TransactionRepository>(),
           ),
         ),
+
+        // ===== AI =====
+        Provider(create: (ctx) => AiRepository(ctx.read<AiApi>())),
+        ChangeNotifierProvider(create: (ctx) => AiVm(ctx.read<AiRepository>())),
 
         // ===== ViewModels =====
         ChangeNotifierProvider(
@@ -84,20 +106,17 @@ class MoneyTrackApp extends StatelessWidget {
         ),
       ],
       child: Consumer<SettingsVm>(
-      builder: (context, settingsVm, _) {
-        final brightness = settingsVm.themeMode.toBrightness(); // null => system
+        builder: (context, settingsVm, _) {
+          final brightness = settingsVm.themeMode.toBrightness(); // null => system
 
-        return CupertinoApp(
-          debugShowCheckedModeBanner: false,
-          title: 'MoneyTrack',
-          theme: CupertinoThemeData(
-            brightness: brightness,
-          ),
-      home: const _AuthGate(),
-    );
-  },
-),
-
+          return CupertinoApp(
+            debugShowCheckedModeBanner: false,
+            title: 'MoneyTrack',
+            theme: CupertinoThemeData(brightness: brightness),
+            home: const _AuthGate(),
+          );
+        },
+      ),
     );
   }
 }
